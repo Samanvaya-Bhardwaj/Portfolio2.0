@@ -1,0 +1,25 @@
+# Render Blueprint — deploys API, Socket.IO and the built React app as one free web service.
+# Render → New → Blueprint → select this repo. You'll be prompted for MONGODB_URI.
+services:
+  - type: web
+    name: samanvaya-portfolio
+    runtime: node
+    plan: free
+    region: singapore
+    buildCommand: npm install --include=dev && npm run build
+    startCommand: npm start
+    healthCheckPath: /api/health
+    autoDeploy: true
+    envVars:
+      - key: NODE_ENV
+        value: production
+      - key: NODE_VERSION
+        value: 22
+      - key: MONGODB_URI
+        sync: false # MongoDB Atlas connection string, entered in the dashboard
+      - key: JWT_SECRET
+        generateValue: true
+      - key: JWT_EXPIRES_IN
+        value: 12h
+      # CLIENT_ORIGIN is optional: the server falls back to Render's RENDER_EXTERNAL_URL.
+      # Set it only when adding a custom domain or a separately hosted frontend.
