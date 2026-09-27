@@ -83,4 +83,10 @@ export const api = {
   messages: () => request('/messages', { auth: true }),
   markMessage: (id, read) => request(`/messages/${id}`, { method: 'PATCH', body: { read }, auth: true }),
   deleteMessage: (id) => request(`/messages/${id}`, { method: 'DELETE', auth: true }),
+
+  chats: () => request('/chats', { auth: true }).then((r) => r.data),
+  chat: (id) => request(`/chats/${id}`, { auth: true }).then((r) => r.data),
+  replyChat: (id, text) => request(`/chats/${id}/messages`, { method: 'POST', body: { text }, auth: true }).then((r) => r.data),
+  markChatRead: (id) => request(`/chats/${id}/read`, { method: 'POST', auth: true }).then((r) => r.data),
+  deleteChat: (id) => request(`/chats/${id}`, { method: 'DELETE', auth: true }),
 };

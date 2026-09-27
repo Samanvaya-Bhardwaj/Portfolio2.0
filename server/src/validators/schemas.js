@@ -145,3 +145,13 @@ export function toUpdateSchema(schema) {
   );
   return z.object(shape);
 }
+
+// ── Live chat ─────────────────────────────────────────────────────────────
+export const chatSendSchema = z.object({
+  token: z.string().max(100).nullish(),
+  name: text(60).default(''),
+  email: z.union([z.literal(''), z.string().trim().toLowerCase().email('Enter a valid email').max(200)]).default(''),
+  text: requiredText(1000),
+});
+
+export const chatReplySchema = z.object({ text: requiredText(2000) });

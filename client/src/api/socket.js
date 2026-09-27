@@ -5,6 +5,12 @@ export const EVENTS = {
   contentChanged: 'content:changed',
   messageNew: 'message:new',
   messageChanged: 'message:changed',
+  chatMessage: 'chat:message',
+  chatUpdated: 'chat:updated',
+  chatTyping: 'chat:typing',
+  chatPresence: 'chat:presence',
+  chatAgent: 'chat:agent',
+  chatClosed: 'chat:closed',
 };
 
 let socket;

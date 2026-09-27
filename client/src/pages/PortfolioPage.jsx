@@ -10,6 +10,7 @@ import Experience from '../components/sections/Experience.jsx';
 import Projects from '../components/sections/Projects.jsx';
 import Achievements from '../components/sections/Achievements.jsx';
 import Contact from '../components/sections/Contact.jsx';
+import ChatWidget from '../components/chat/ChatWidget.jsx';
 import Icon from '../components/ui/Icon.jsx';
 
 function LoadingScreen() {
@@ -60,6 +61,7 @@ export default function PortfolioPage() {
         <Contact profile={data.profile} />
       </main>
       <Footer profile={data.profile} live={live} />
+      <ChatWidget ownerName={data.profile.name} />
     </>
   );
 }

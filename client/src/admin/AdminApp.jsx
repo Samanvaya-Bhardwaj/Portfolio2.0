@@ -8,6 +8,7 @@ import Overview from './pages/Overview.jsx';
 import ProfileEditor from './pages/ProfileEditor.jsx';
 import ResourcePage from './pages/ResourcePage.jsx';
 import Messages from './pages/Messages.jsx';
+import Chats from './pages/Chats.jsx';
 import Account from './pages/Account.jsx';
 import { RESOURCES } from './resources.js';
 import '../styles/admin.css';
@@ -59,6 +60,7 @@ export default function AdminApp() {
               <Route key={key} path={key} element={<ResourcePage key={key} resource={key} />} />
             ))}
             <Route path="messages" element={<Messages />} />
+            <Route path="chats" element={<Chats />} />
             <Route path="account" element={<Account />} />
             <Route path="*" element={<Navigate to="/admin" replace />} />
           </Route>

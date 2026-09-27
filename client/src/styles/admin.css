@@ -655,3 +655,139 @@
     display: none;
   }
 }
+
+/* Live chat inbox (bubbles, compose and thread come from global.css) */
+.admin-page.is-wide {
+  max-width: 1160px;
+}
+.chat-admin {
+  display: grid;
+  grid-template-columns: minmax(240px, 320px) minmax(0, 1fr);
+  height: calc(100vh - 190px);
+  min-height: 460px;
+  overflow: hidden;
+}
+.chat-list {
+  overflow-y: auto;
+  border-right: 1px solid var(--border);
+  padding: 6px;
+}
+.chat-list .empty-state {
+  margin: 24px 8px;
+}
+.chat-row {
+  width: 100%;
+  display: grid;
+  grid-template-columns: auto minmax(0, 1fr) auto;
+  align-items: center;
+  gap: 10px;
+  padding: 10px 12px;
+  border-radius: 10px;
+  text-align: left;
+  transition: background 0.2s;
+}
+.chat-row:hover {
+  background: var(--surface);
+}
+.chat-row.is-active {
+  background: var(--surface-2);
+}
+.chat-row-main {
+  display: grid;
+  min-width: 0;
+}
+.chat-row-main strong,
+.chat-row-main span {
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+.chat-row-main strong {
+  font-size: 0.9rem;
+  font-weight: 500;
+}
+.chat-row.is-unread .chat-row-main strong {
+  font-weight: 650;
+}
+.chat-row-main span {
+  font-size: 0.8rem;
+}
+.chat-row.is-unread .chat-row-main span {
+  color: var(--text-2);
+}
+.chat-row-meta {
+  display: grid;
+  justify-items: end;
+  gap: 4px;
+}
+.chat-row-meta .nav-badge {
+  margin: 0;
+}
+.presence-dot {
+  display: inline-block;
+  width: 8px;
+  height: 8px;
+  border-radius: 50%;
+  background: var(--faint);
+  flex: none;
+}
+.presence-dot.is-online {
+  background: var(--success);
+  box-shadow: 0 0 8px var(--success);
+}
+.chat-pane {
+  display: flex;
+  flex-direction: column;
+  min-width: 0;
+  min-height: 0;
+}
+.chat-pane > .empty-state,
+.chat-pane > .loader {
+  margin: auto;
+}
+.chat-pane-head {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  padding: 12px 16px;
+  border-bottom: 1px solid var(--border);
+}
+.chat-pane-who {
+  display: grid;
+  min-width: 0;
+  margin-right: auto;
+}
+.chat-pane-who strong,
+.chat-pane-who > span {
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+.chat-pane-head .btn span {
+  max-width: 200px;
+  overflow: hidden;
+  text-overflow: ellipsis;
+}
+.chat-back {
+  display: none;
+}
+
+@media (max-width: 860px) {
+  .chat-admin {
+    grid-template-columns: 1fr;
+    height: calc(100dvh - 170px);
+  }
+  .chat-list {
+    border-right: 0;
+  }
+  .chat-admin.has-open .chat-list,
+  .chat-admin:not(.has-open) .chat-pane {
+    display: none;
+  }
+  .chat-back {
+    display: inline-grid;
+  }
+  .chat-pane-head .btn span {
+    display: none;
+  }
+}

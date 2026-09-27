@@ -27,6 +27,13 @@ export function formatDateTime(iso) {
   });
 }
 
+/** Clock time for today, short date otherwise — for chat bubbles and inbox rows. */
+export function formatChatTime(iso) {
+  const d = new Date(iso);
+  const sameDay = d.toDateString() === new Date().toDateString();
+  return d.toLocaleString(undefined, sameDay ? { hour: '2-digit', minute: '2-digit' } : { day: 'numeric', month: 'short', hour: '2-digit', minute: '2-digit' });
+}
+
 export function sortByOrder(items) {
   return [...items].sort(
     (a, b) => (a.order ?? 0) - (b.order ?? 0) || new Date(b.createdAt) - new Date(a.createdAt),

@@ -20,6 +20,7 @@ React + Vite ── REST (/api) ──► Express ──► MongoDB   (source of
   - static fallback when WebGL isn't available
 - **Admin dashboard at `/admin`** with full CRUD for projects, skills, experience, education and achievements, plus a profile editor, a contact-message inbox (read/unread/delete/reply) and a password change page. Each item has an order and a visible/hidden flag.
 - **Real-time sync.** Every committed write is broadcast. Open portfolio tabs update without a refresh, hidden items disappear immediately, and admins get new contact messages live. Clients refetch after a reconnect so they can't drift out of sync.
+- **Live chat.** Visitors can chat with you from a floating widget without signing up. The first message creates a conversation and gives the visitor a random session token, stored in their browser, so the chat survives reloads and syncs across tabs. The server only stores a SHA-256 hash of the token. The dashboard's Live chat page shows every conversation with presence (is the visitor still on the site?), typing indicators and unread badges. Visitors see whether you're online. Chats are rate-limited per socket and per IP, and they expire after 90 days of inactivity.
 - **Security:**
   - bcrypt (12 rounds)
   - JWT bearer auth

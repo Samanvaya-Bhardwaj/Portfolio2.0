@@ -19,7 +19,7 @@ export default function Overview() {
   useEffect(() => {
     load();
     const socket = getSocket();
-    const events = [EVENTS.contentChanged, EVENTS.messageNew, EVENTS.messageChanged];
+    const events = [EVENTS.contentChanged, EVENTS.messageNew, EVENTS.messageChanged, EVENTS.chatUpdated];
     events.forEach((e) => socket.on(e, load));
     return () => events.forEach((e) => socket.off(e, load));
   }, [load]);
@@ -27,6 +27,7 @@ export default function Overview() {
   const cards = [
     ...Object.entries(RESOURCES).map(([key, r]) => ({ key, label: r.label, icon: r.icon, value: stats?.[key], to: `/admin/${key}` })),
     { key: 'messages', label: 'Messages', icon: 'inbox', value: stats?.messages, sub: stats ? `${stats.unread} unread` : '', to: '/admin/messages' },
+    { key: 'chats', label: 'Live chats', icon: 'chat', value: stats?.chats, sub: stats ? `${stats.chatsUnread} awaiting reply` : '', to: '/admin/chats' },
   ];
 
   return (

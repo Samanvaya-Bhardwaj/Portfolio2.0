@@ -1,6 +1,6 @@
 import { Router } from 'express';
 import mongoose from 'mongoose';
-import { Profile, Skill, Education, Experience, Project, Achievement, Message } from '../models/index.js';
+import { Profile, Skill, Education, Experience, Project, Achievement, Message, Chat } from '../models/index.js';
 import {
   skillSchema,
   educationSchema,
@@ -14,6 +14,7 @@ import { contentRouter } from './content.js';
 import authRoutes from './auth.js';
 import profileRoutes from './profile.js';
 import messageRoutes from './messages.js';
+import chatRoutes from './chats.js';
 
 /** Single registry of content collections — add a new section here and it gets full CRUD + sync. */
 export const COLLECTIONS = [
@@ -46,8 +47,13 @@ router.get('/portfolio', async (_req, res) => {
 
 router.get('/admin/stats', requireAuth, async (_req, res) => {
   const counts = await Promise.all(COLLECTIONS.map(({ model }) => model.countDocuments()));
-  const [messages, unread] = await Promise.all([Message.countDocuments(), Message.countDocuments({ read: false })]);
-  const data = { messages, unread };
+  const [messages, unread, chats, chatsUnread] = await Promise.all([
+    Message.countDocuments(),
+    Message.countDocuments({ read: false }),
+    Chat.countDocuments(),
+    Chat.countDocuments({ unread: { $gt: 0 } }),
+  ]);
+  const data = { messages, unread, chats, chatsUnread };
   COLLECTIONS.forEach(({ resource }, i) => {
     data[resource] = counts[i];
   });
@@ -57,6 +63,7 @@ router.get('/admin/stats', requireAuth, async (_req, res) => {
 router.use('/auth', authRoutes);
 router.use('/profile', profileRoutes);
 router.use('/messages', messageRoutes);
+router.use('/chats', chatRoutes);
 COLLECTIONS.forEach((config) => router.use(`/${config.resource}`, contentRouter(config)));
 
 export default router;
