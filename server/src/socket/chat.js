@@ -1,29 +1,10 @@
 import mongoose from 'mongoose';
-import { Chat, CHAT_HISTORY_LIMIT, hashChatToken, newChatToken } from '../models/index.js';
 import { chatSendSchema } from '../validators/schemas.js';
+import { findChatByToken, hit, postVisitorMessage } from '../services/chat.js';
 import { EVENTS, ROOMS } from './events.js';
 
 const SEND_WINDOW_MS = 10_000;
 const SEND_LIMIT = 8; // messages per socket per window
-const CREATE_WINDOW_MS = 60 * 60 * 1000;
-const CREATE_LIMIT = 5; // new conversations per IP per window
-
-const createdByIp = new Map(); // ip → timestamps of conversations started
-
-setInterval(() => {
-  const now = Date.now();
-  for (const [ip, times] of createdByIp) {
-    if (!times.length || now - times.at(-1) > CREATE_WINDOW_MS) createdByIp.delete(ip);
-  }
-}, 10 * 60 * 1000).unref();
-
-/** Sliding-window limiter: records the hit and returns false once `limit` is reached. */
-function hit(times, windowMs, limit, now = Date.now()) {
-  while (times.length && now - times[0] > windowMs) times.shift();
-  if (times.length >= limit) return false;
-  times.push(now);
-  return true;
-}
 
 /** Mirrors Express's `trust proxy: 1` — the hop our own proxy appended, not a client-supplied value. */
 function clientIp(socket) {
@@ -40,9 +21,23 @@ function notifyPresence(io, chatId) {
 }
 
 /**
+ * Fan a stored message out to the visitor's tabs and the admins, and refresh the inbox row.
+ * When `sender` is given it's skipped — it already has the message from its ack.
+ */
+export function broadcastChatMessage(io, { chat, saved, issuedToken }, sender) {
+  const rooms = [ROOMS.chat(chat.id), ROOMS.admins];
+  (sender ? sender.to(rooms) : io.to(rooms)).emit(EVENTS.chatMessage, { chatId: chat.id, message: saved });
+  io.to(ROOMS.admins).emit(EVENTS.chatUpdated, {
+    action: issuedToken ? 'created' : 'updated',
+    chat: chat.toSummary(chatOnline(io, chat.id)),
+  });
+}
+
+/**
  * Visitor side of live chat. A visitor has no account: the first message creates a
  * conversation and returns a random session token, which their browser keeps and
- * presents to resume it (across reloads and tabs). Admins reply through the REST API.
+ * presents to resume it (across reloads and tabs). Admins reply through the REST API,
+ * and files are uploaded over REST by both sides (routes/chatFiles.js).
  */
 export function registerChatHandlers(io, socket) {
   const sends = [];
@@ -51,6 +46,7 @@ export function registerChatHandlers(io, socket) {
     try {
       await handler(payload, ack);
     } catch (err) {
+      if (err.status && err.status < 500) return reply(ack, { ok: false, error: err.message, ...(err.expired && { expired: true }) });
       console.error('[chat]', err);
       reply(ack, { ok: false, error: 'Something went wrong. Please try again.' });
     }
@@ -73,9 +69,8 @@ export function registerChatHandlers(io, socket) {
     'chat:resume',
     safe(async (token, ack) => {
       const base = { agentOnline: agentOnline(io) };
-      if (typeof token !== 'string' || !token || token.length > 100) return reply(ack, { ok: false, ...base });
-      const chat = await Chat.findOne({ tokenHash: hashChatToken(token) });
-      if (!chat) return reply(ack, { ok: false, expired: true, ...base });
+      const chat = await findChatByToken(token);
+      if (!chat) return reply(ack, { ok: false, ...(token && { expired: true }), ...base });
       attach(chat.id);
       reply(ack, { ok: true, chat: chat.toVisitorView(), ...base });
     }),
@@ -90,41 +85,10 @@ export function registerChatHandlers(io, socket) {
         return reply(ack, { ok: false, error: 'You’re sending messages too quickly. Please slow down.' });
       }
 
-      const { token, name, email, text } = parsed.data;
-      const message = { from: 'visitor', text, at: new Date() };
-      let chat;
-      let issuedToken;
-
-      if (token) {
-        const $set = { lastMessageAt: message.at };
-        if (name) $set.name = name;
-        if (email) $set.email = email;
-        chat = await Chat.findOneAndUpdate(
-          { tokenHash: hashChatToken(token) },
-          { $push: { messages: { $each: [message], $slice: -CHAT_HISTORY_LIMIT } }, $inc: { unread: 1 }, $set },
-          { new: true, projection: { messages: { $slice: -1 } } },
-        );
-        if (!chat) return reply(ack, { ok: false, expired: true, error: 'This chat has ended. Send your message again to start a new one.' });
-      } else {
-        const ip = clientIp(socket);
-        const times = createdByIp.get(ip) ?? [];
-        createdByIp.set(ip, times);
-        if (!hit(times, CREATE_WINDOW_MS, CREATE_LIMIT)) {
-          return reply(ack, { ok: false, error: 'Too many new chats from your network. Please try again later.' });
-        }
-        issuedToken = newChatToken();
-        chat = await Chat.create({ tokenHash: hashChatToken(issuedToken), name, email, messages: [message], unread: 1, lastMessageAt: message.at });
-      }
-
-      const saved = chat.messages.at(-1).toJSON();
-      attach(chat.id);
-      // The sender gets the message in its ack; its other tabs and the admins get it here.
-      socket.to([ROOMS.chat(chat.id), ROOMS.admins]).emit(EVENTS.chatMessage, { chatId: chat.id, message: saved });
-      io.to(ROOMS.admins).emit(EVENTS.chatUpdated, {
-        action: issuedToken ? 'created' : 'updated',
-        chat: chat.toSummary(chatOnline(io, chat.id)),
-      });
-      reply(ack, { ok: true, chatId: chat.id, message: saved, ...(issuedToken && { token: issuedToken }) });
+      const result = await postVisitorMessage({ ...parsed.data, ip: clientIp(socket) });
+      attach(result.chat.id);
+      broadcastChatMessage(io, result, socket);
+      reply(ack, { ok: true, chatId: result.chat.id, message: result.saved, ...(result.issuedToken && { token: result.issuedToken }) });
     }),
   );
 

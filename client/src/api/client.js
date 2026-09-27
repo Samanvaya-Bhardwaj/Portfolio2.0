@@ -32,9 +32,11 @@ export class ApiError extends Error {
   }
 }
 
-async function request(path, { method = 'GET', body, auth = false, signal } = {}) {
-  const headers = { Accept: 'application/json' };
-  if (body !== undefined) headers['Content-Type'] = 'application/json';
+/** `body` may be JSON-able or a FormData (multipart). `as: 'blob'` returns the raw response body. */
+async function request(path, { method = 'GET', body, auth = false, signal, headers: extra, as = 'json' } = {}) {
+  const headers = { Accept: 'application/json', ...extra };
+  const isForm = body instanceof FormData;
+  if (body !== undefined && !isForm) headers['Content-Type'] = 'application/json';
   const token = tokenStore.get();
   if (auth && token) headers.Authorization = `Bearer ${token}`;
 
@@ -43,7 +45,7 @@ async function request(path, { method = 'GET', body, auth = false, signal } = {}
     res = await fetch(`${API_BASE}${path}`, {
       method,
       headers,
-      body: body !== undefined ? JSON.stringify(body) : undefined,
+      body: body === undefined || isForm ? body : JSON.stringify(body),
       signal,
     });
   } catch (err) {
@@ -51,13 +53,23 @@ async function request(path, { method = 'GET', body, auth = false, signal } = {}
     throw new ApiError(0, 'Network error — is the API server running?');
   }
 
-  const payload = await res.json().catch(() => ({}));
   if (!res.ok) {
+    const payload = await res.json().catch(() => ({}));
     if (res.status === 401 && auth) window.dispatchEvent(new Event('auth:expired'));
     throw new ApiError(res.status, payload?.error?.message || res.statusText, payload?.error?.details);
   }
-  return payload;
+  if (as === 'blob') return res.blob();
+  return res.json().catch(() => ({}));
 }
+
+/** Multipart body from a plain object, skipping empty fields. */
+function formData(fields) {
+  const fd = new FormData();
+  Object.entries(fields).forEach(([k, v]) => v !== undefined && v !== '' && fd.append(k, v));
+  return fd;
+}
+
+const chatHeaders = (token) => (token ? { 'X-Chat-Token': token } : undefined);
 
 export const api = {
   // Public
@@ -89,4 +101,12 @@ export const api = {
   replyChat: (id, text) => request(`/chats/${id}/messages`, { method: 'POST', body: { text }, auth: true }).then((r) => r.data),
   markChatRead: (id) => request(`/chats/${id}/read`, { method: 'POST', auth: true }).then((r) => r.data),
   deleteChat: (id) => request(`/chats/${id}`, { method: 'DELETE', auth: true }),
+  sendAdminChatFile: (id, file, text = '') =>
+    request(`/chats/${id}/files`, { method: 'POST', body: formData({ text, file }), auth: true }).then((r) => r.data),
+
+  // Live chat files. Visitors authenticate with their chat session token, admins with their JWT.
+  sendChatFile: (file, { token, name = '', email = '', text = '' } = {}) =>
+    request('/chat/files', { method: 'POST', body: formData({ name, email, text, file }), headers: chatHeaders(token) }).then((r) => r.data),
+  chatFile: (fileId, { token } = {}) =>
+    request(`/chat/files/${fileId}`, { auth: !token, headers: chatHeaders(token), as: 'blob' }),
 };

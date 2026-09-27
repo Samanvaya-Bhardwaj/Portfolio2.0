@@ -3,6 +3,7 @@ import { env } from './config/env.js';
 import { connectDB, disconnectDB } from './config/db.js';
 import { createApp } from './app.js';
 import { initSocket } from './socket/index.js';
+import { startChatFileSweep } from './services/chatFiles.js';
 
 async function start() {
   await connectDB();
@@ -10,6 +11,7 @@ async function start() {
   const app = createApp();
   const server = http.createServer(app);
   const io = initSocket(server);
+  startChatFileSweep();
 
   server.on('error', (err) => {
     if (err.code === 'EADDRINUSE') console.error(`[server] port ${env.port} is already in use — set PORT in server/.env`);

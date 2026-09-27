@@ -15,6 +15,7 @@ import authRoutes from './auth.js';
 import profileRoutes from './profile.js';
 import messageRoutes from './messages.js';
 import chatRoutes from './chats.js';
+import chatFileRoutes from './chatFiles.js';
 
 /** Single registry of content collections — add a new section here and it gets full CRUD + sync. */
 export const COLLECTIONS = [
@@ -64,6 +65,7 @@ router.use('/auth', authRoutes);
 router.use('/profile', profileRoutes);
 router.use('/messages', messageRoutes);
 router.use('/chats', chatRoutes);
+router.use('/chat', chatFileRoutes);
 COLLECTIONS.forEach((config) => router.use(`/${config.resource}`, contentRouter(config)));
 
 export default router;

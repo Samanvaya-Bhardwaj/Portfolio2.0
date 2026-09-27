@@ -7,10 +7,22 @@ export const CHAT_HISTORY_LIMIT = 500;
 /** Conversations with no activity for this long are removed by a TTL index. */
 const CHAT_TTL_SECONDS = 60 * 60 * 24 * 90;
 
+/** A file stored in GridFS (bucket `chatFiles`), referenced from a message. */
+const attachmentSchema = new mongoose.Schema(
+  {
+    fileId: { type: mongoose.Schema.Types.ObjectId, required: true },
+    name: { type: String, required: true },
+    size: { type: Number, required: true },
+    type: { type: String, required: true },
+  },
+  { _id: false },
+);
+
 const chatMessageSchema = new mongoose.Schema(
   {
     from: { type: String, enum: ['visitor', 'admin'], required: true },
-    text: { type: String, required: true, trim: true },
+    text: { type: String, trim: true, default: '' },
+    attachment: { type: attachmentSchema, default: undefined },
     at: { type: Date, default: Date.now },
   },
   { toJSON: baseOptions.toJSON },

@@ -2,7 +2,7 @@ import { Server } from 'socket.io';
 import { env } from '../config/env.js';
 import { verifyToken } from '../middleware/auth.js';
 import { EVENTS, ROOMS } from './events.js';
-import { agentOnline, chatOnline, registerChatHandlers } from './chat.js';
+import { agentOnline, broadcastChatMessage, chatOnline, registerChatHandlers } from './chat.js';
 
 export { EVENTS, ROOMS };
 
@@ -63,9 +63,9 @@ export function emitToChat(chatId, event, payload) {
   io?.to(ROOMS.chat(chatId)).emit(event, payload);
 }
 
-/** Emit to a visitor's conversation and all admins in one pass (no duplicates). */
-export function emitToChatAndAdmins(chatId, event, payload) {
-  io?.to([ROOMS.chat(chatId), ROOMS.admins]).emit(event, payload);
+/** Deliver a stored chat message (from services/chat.js) to the visitor's tabs and all admins. */
+export function announceChatMessage(result) {
+  if (io) broadcastChatMessage(io, result);
 }
 
 export const isChatOnline = (chatId) => (io ? chatOnline(io, chatId) : false);

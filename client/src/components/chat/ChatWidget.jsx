@@ -2,7 +2,9 @@ import { useCallback, useEffect, useRef, useState } from 'react';
 import { AnimatePresence, motion } from 'framer-motion';
 import Icon from '../ui/Icon.jsx';
 import ChatThread from './ChatThread.jsx';
+import { api } from '../../api/client.js';
 import { EVENTS, getSocket } from '../../api/socket.js';
+import { ACCEPT, checkFile, saveBlob } from './files.js';
 
 const TOKEN_KEY = 'portfolio.chat.token';
 const TYPING_THROTTLE_MS = 2500;
@@ -40,6 +42,7 @@ export default function ChatWidget({ ownerName }) {
   const [typing, setTyping] = useState(false);
   const [unseen, setUnseen] = useState(0);
   const [sending, setSending] = useState(false);
+  const [uploading, setUploading] = useState(null); // name of the file being sent
   const [error, setError] = useState('');
   const [notice, setNotice] = useState('');
 
@@ -48,6 +51,7 @@ export default function ChatWidget({ ownerName }) {
   const typingTimer = useRef(null);
   const lastTypingSent = useRef(0);
   const inputRef = useRef(null);
+  const fileRef = useRef(null);
   openRef.current = open;
   chatIdRef.current = chatId;
 
@@ -166,6 +170,43 @@ export default function ChatWidget({ ownerName }) {
       });
   };
 
+  // Files go over REST; any typed text is sent with the file as its caption.
+  const onPickFile = async (e) => {
+    const file = e.target.files?.[0];
+    e.target.value = '';
+    if (!file || uploading) return;
+    const problem = checkFile(file);
+    if (problem) return setError(problem);
+
+    const caption = draft.trim();
+    setUploading(file.name);
+    setError('');
+    setNotice('');
+    try {
+      const res = await api.sendChatFile(file, { token: chatToken.get(), name: contact.name, email: contact.email, text: caption });
+      if (res.token) {
+        chatToken.set(res.token);
+        getSocket().emit('chat:resume', res.token); // join the new conversation's room
+      }
+      setChatId(res.chatId);
+      addMessage(res.message);
+      if (caption) setDraft('');
+    } catch (err) {
+      if (err.status === 410) reset();
+      setError(err.message);
+    } finally {
+      setUploading(null);
+    }
+  };
+
+  const openFile = async (attachment) => {
+    try {
+      saveBlob(await api.chatFile(attachment.fileId, { token: chatToken.get() }), attachment.name);
+    } catch (err) {
+      setError(err.status === 404 ? 'That file is no longer available.' : err.message);
+    }
+  };
+
   const onKeyDown = (e) => {
     if (e.key === 'Enter' && !e.shiftKey && !e.nativeEvent.isComposing) send(e);
   };
@@ -204,9 +245,10 @@ export default function ChatWidget({ ownerName }) {
               self="visitor"
               typing={typing}
               typingLabel={`${firstName} is typing`}
+              onOpenFile={openFile}
               empty={
                 <p className="chat-empty muted">
-                  Hi! 👋 Ask me anything about my work.
+                  Hi! 👋 Ask me anything about my work, or attach your résumé or a document.
                   {agentOnline ? ' I’m around and will reply here.' : ' I’m away right now — leave your email and I’ll get back to you.'}
                 </p>
               }
@@ -240,7 +282,23 @@ export default function ChatWidget({ ownerName }) {
                   {error || notice}
                 </p>
               )}
+              {uploading && (
+                <p className="chat-note" role="status">
+                  Sending {uploading}…
+                </p>
+              )}
               <div className="chat-input-row">
+                <input ref={fileRef} type="file" accept={ACCEPT} hidden onChange={onPickFile} />
+                <button
+                  type="button"
+                  className="chat-attach"
+                  onClick={() => fileRef.current?.click()}
+                  disabled={Boolean(uploading)}
+                  aria-label="Attach a file (PDF, Word, text or image, up to 5 MB)"
+                  title="Attach a file — PDF, Word, text or image, up to 5 MB"
+                >
+                  <Icon name="paperclip" size={18} />
+                </button>
                 <textarea
                   ref={inputRef}
                   rows={1}

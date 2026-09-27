@@ -1,12 +1,16 @@
 import { Router } from 'express';
-import { Chat, CHAT_HISTORY_LIMIT } from '../models/index.js';
+import { Chat } from '../models/index.js';
 import { requireAuth } from '../middleware/auth.js';
+import { chatFileUpload } from '../middleware/upload.js';
 import { validateBody, validateObjectId } from '../middleware/validate.js';
-import { chatReplySchema } from '../validators/schemas.js';
-import { EVENTS, emitToChat, emitToChatAndAdmins, isChatOnline, notifyAdmins } from '../socket/index.js';
+import { chatAdminUploadSchema, chatReplySchema } from '../validators/schemas.js';
+import { postAdminMessage } from '../services/chat.js';
+import { deleteChatFile, deleteChatFiles, saveChatFile } from '../services/chatFiles.js';
+import { EVENTS, announceChatMessage, emitToChat, isChatOnline, notifyAdmins } from '../socket/index.js';
 import { ApiError } from '../utils/ApiError.js';
 
-// Admin side of live chat. Visitors talk over Socket.IO (see socket/chat.js).
+// Admin side of live chat. Visitors talk over Socket.IO (see socket/chat.js); file
+// downloads for both sides live in routes/chatFiles.js.
 const router = Router();
 router.use(requireAuth);
 
@@ -24,21 +28,23 @@ router.get('/:id', validateObjectId(), async (req, res) => {
 });
 
 router.post('/:id/messages', validateObjectId(), validateBody(chatReplySchema), async (req, res) => {
-  const message = { from: 'admin', text: req.body.text, at: new Date() };
-  const chat = await Chat.findByIdAndUpdate(
-    req.params.id,
-    {
-      $push: { messages: { $each: [message], $slice: -CHAT_HISTORY_LIMIT } },
-      $set: { lastMessageAt: message.at, unread: 0 }, // replying implies it's been read
-    },
-    { new: true, projection: lastOnly },
-  );
-  if (!chat) throw ApiError.notFound('Chat not found');
+  const result = await postAdminMessage(req.params.id, { text: req.body.text });
+  announceChatMessage(result);
+  res.status(201).json({ data: result.saved });
+});
 
-  const saved = chat.messages.at(-1).toJSON();
-  emitToChatAndAdmins(chat.id, EVENTS.chatMessage, { chatId: chat.id, message: saved });
-  notifyAdmins(EVENTS.chatUpdated, { action: 'updated', chat: chat.toSummary(isChatOnline(chat.id)) });
-  res.status(201).json({ data: saved });
+router.post('/:id/files', validateObjectId(), chatFileUpload, validateBody(chatAdminUploadSchema), async (req, res) => {
+  if (!(await Chat.exists({ _id: req.params.id }))) throw ApiError.notFound('Chat not found');
+  const attachment = await saveChatFile(req.params.id, req.chatFile);
+  let result;
+  try {
+    result = await postAdminMessage(req.params.id, { text: req.body.text, attachment });
+  } catch (err) {
+    await deleteChatFile(attachment.fileId);
+    throw err;
+  }
+  announceChatMessage(result);
+  res.status(201).json({ data: result.saved });
 });
 
 router.post('/:id/read', validateObjectId(), async (req, res) => {
@@ -52,6 +58,7 @@ router.post('/:id/read', validateObjectId(), async (req, res) => {
 router.delete('/:id', validateObjectId(), async (req, res) => {
   const chat = await Chat.findByIdAndDelete(req.params.id);
   if (!chat) throw ApiError.notFound('Chat not found');
+  await deleteChatFiles(chat.id);
   emitToChat(chat.id, EVENTS.chatClosed, {});
   notifyAdmins(EVENTS.chatUpdated, { action: 'deleted', id: chat.id });
   res.json({ data: { id: chat.id } });

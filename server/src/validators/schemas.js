@@ -155,3 +155,7 @@ export const chatSendSchema = z.object({
 });
 
 export const chatReplySchema = z.object({ text: requiredText(2000) });
+
+/** Text fields sent alongside a file upload (multipart). */
+export const chatVisitorUploadSchema = chatSendSchema.extend({ text: text(1000).default('') });
+export const chatAdminUploadSchema = z.object({ text: text(2000).default('') });

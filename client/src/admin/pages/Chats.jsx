@@ -6,6 +6,7 @@ import { useToast } from '../components/Toast.jsx';
 import { api } from '../../api/client.js';
 import { EVENTS, getSocket } from '../../api/socket.js';
 import { formatChatTime, formatDateTime } from '../../utils/format.js';
+import { ACCEPT, checkFile, saveBlob } from '../../components/chat/files.js';
 
 const TYPING_THROTTLE_MS = 2500;
 
@@ -21,10 +22,12 @@ export default function Chats() {
   const [typing, setTyping] = useState(false);
   const [draft, setDraft] = useState('');
   const [sending, setSending] = useState(false);
+  const [uploading, setUploading] = useState(null);
 
   const openIdRef = useRef(openId);
   const typingTimer = useRef(null);
   const lastTypingSent = useRef(0);
+  const fileRef = useRef(null);
   openIdRef.current = openId;
 
   const loadList = useCallback(
@@ -123,14 +126,43 @@ export default function Chats() {
     if (!text || sending || !openId) return;
     setSending(true);
     try {
-      const message = await api.replyChat(openId, text);
-      setThread((t) => (t && !t.messages.some((m) => m.id === message.id) ? { ...t, messages: [...t.messages, message] } : t));
+      appendToThread(await api.replyChat(openId, text));
       setDraft('');
       lastTypingSent.current = 0;
     } catch (err) {
       toast(err.message, 'error');
     } finally {
       setSending(false);
+    }
+  };
+
+  const appendToThread = (message) =>
+    setThread((t) => (t && !t.messages.some((m) => m.id === message.id) ? { ...t, messages: [...t.messages, message] } : t));
+
+  // Any typed text goes with the file as its caption.
+  const onPickFile = async (e) => {
+    const file = e.target.files?.[0];
+    e.target.value = '';
+    if (!file || !openId || uploading) return;
+    const problem = checkFile(file);
+    if (problem) return toast(problem, 'error');
+    const caption = draft.trim();
+    setUploading(file.name);
+    try {
+      appendToThread(await api.sendAdminChatFile(openId, file, caption));
+      if (caption) setDraft('');
+    } catch (err) {
+      toast(err.message, 'error');
+    } finally {
+      setUploading(null);
+    }
+  };
+
+  const openFile = async (attachment) => {
+    try {
+      saveBlob(await api.chatFile(attachment.fileId), attachment.name);
+    } catch (err) {
+      toast(err.message, 'error');
     }
   };
 
@@ -187,7 +219,7 @@ export default function Chats() {
                     <strong>{displayName(c)}</strong>
                     <span className="muted">
                       {c.lastMessage?.from === 'admin' && 'You: '}
-                      {c.lastMessage?.text}
+                      {c.lastMessage?.text || (c.lastMessage?.attachment && `📎 ${c.lastMessage.attachment.name}`)}
                     </span>
                   </span>
                   <span className="chat-row-meta">
@@ -230,7 +262,7 @@ export default function Chats() {
                   <ConfirmButton onConfirm={onDelete} label="Delete conversation" />
                 </header>
 
-                <ChatThread messages={thread.messages} self="admin" typing={typing} typingLabel="Visitor is typing" />
+                <ChatThread messages={thread.messages} self="admin" typing={typing} typingLabel="Visitor is typing" onOpenFile={openFile} />
 
                 <form className="chat-compose" onSubmit={send}>
                   {!thread.online && (
@@ -238,7 +270,23 @@ export default function Chats() {
                       The visitor has left. They’ll see your reply if they come back{thread.email ? ', or you can email them' : ''}.
                     </p>
                   )}
+                  {uploading && (
+                    <p className="chat-note" role="status">
+                      Sending {uploading}…
+                    </p>
+                  )}
                   <div className="chat-input-row">
+                    <input ref={fileRef} type="file" accept={ACCEPT} hidden onChange={onPickFile} />
+                    <button
+                      type="button"
+                      className="chat-attach"
+                      onClick={() => fileRef.current?.click()}
+                      disabled={Boolean(uploading)}
+                      aria-label="Attach a file"
+                      title="Attach a file — PDF, Word, text or image, up to 5 MB"
+                    >
+                      <Icon name="paperclip" size={18} />
+                    </button>
                     <textarea
                       rows={1}
                       maxLength={2000}
